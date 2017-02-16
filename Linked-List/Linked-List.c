@@ -154,3 +154,5 @@ BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1
     ptLinkedListInsert->ptNext = ptInsertLast;
     return SW_OK;
 }
+
+/* End of file */
