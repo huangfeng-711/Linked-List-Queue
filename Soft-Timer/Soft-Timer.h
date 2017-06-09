@@ -30,8 +30,10 @@ extern "C" {
 #define TIME_IS_UP                     (0)      /* 延时时间到         */
 #define TIME_IS_NOT_UP                 (1)      /* 延时时间未到       */
 
-#define ORIGINAL_COUNT_ZERO            (0)      /* 功能计数初始值为1  */
-#define ORIGINAL_COUNT_NOT_ZERO        (1)      /* 功能计数初始值不为1*/
+#define DELETE_NULL_NODE               (0)      /* 不删除结点         */
+#define DELETE_HEAD_NODE               (1)      /* 删除头结点         */
+#define DELETE_MIDDLE_NODE             (2)      /* 删除中间结点       */
+#define DELETE_LAST_NODE               (3)      /* 删除尾结点         */
 
 #define NODE_IS_UPDATE                 (0)      /* 节点有更新         */
 #define NODE_IS_NOT_UPDATE             (1)      /* 节点不更新         */
@@ -66,7 +68,6 @@ BYTE Soft_timer_Init(void);
 * 2017-04-14   V1.00      **         创建
 ******************************************************************************/
 BYTE Soft_timer_Process(void);
-
 
 #ifdef __cplusplus
 }
