@@ -19,8 +19,9 @@
 #include "Linked_List.h"
 #include "Soft_timer.h"
 
-static T_LINKED_LIST_PARA  *sg_aptSoftTimer = {NULL};
-extern WORD16 wCount;
+static T_LINKED_LIST_PARA  *sg_ptSoftTimer = {NULL};
+static BYTE   sg_ucNodeNum = 0, sg_ucCycleTime = 0;
+extern WORD16 g_wCount;
 /******************************************************************************
 * 函数名称: Soft_timer_Init(void)
 * 功能说明: 软件定时器初始化
@@ -36,11 +37,13 @@ extern WORD16 wCount;
 BYTE Soft_timer_Init(void)
 { 
     /* Init the address of Head point */
-    Linked_List_Init(&sg_aptSoftTimer);
-    sg_aptSoftTimer = Linked_List_Create(sg_aptSoftTimer,0,6,0,Board_PrgmLed_Off1);
-    Linked_List_InsertHead(&sg_aptSoftTimer,0,3,5,Board_PrgmLed_On1);
-    Linked_List_InsertLast(sg_aptSoftTimer,0,12,2,Linked_List_Process);
-    Linked_List_InsertMiddle(sg_aptSoftTimer,3,0,9,1,Linked_List_Process);
+    Linked_List_Init(&sg_ptSoftTimer);
+    sg_ptSoftTimer = Linked_List_Create(sg_ptSoftTimer,0,6,0,Board_PrgmLed_Off1);
+    Linked_List_InsertHead(&sg_ptSoftTimer,0,3,5,Board_PrgmLed_On1);
+    Linked_List_InsertLast(sg_ptSoftTimer,0,12,2,Linked_List_Process);
+    Linked_List_InsertMiddle(sg_ptSoftTimer,3,0,9,1,Linked_List_Process);
+    Linked_List_Count(sg_ptSoftTimer,&sg_ucNodeNum);
+    sg_ucCycleTime = sg_ucNodeNum;
     return SW_OK;  
 }
 
@@ -58,102 +61,131 @@ BYTE Soft_timer_Init(void)
 ******************************************************************************/
 BYTE Soft_timer_Process(void)
 { 
-    BYTE i;
-    static BYTE ucExecuteFlag, ucTimeFlag, ucUpdateNodeFlg;
-    static BYTE ucCountRcd[4], ucNodeNum = 4, ucCycleTime = 4;
+    BYTE ucCount;
+    static BYTE s_ucTimeFlag, s_ucUpdateNodeFlg, s_ucDeleteFlg[4] = {0};
+    static BYTE s_ucExecuteFlag = NOT_EXECUTE_FUNC;
     T_LINKED_LIST_PARA  *sg_aptSoftTimerFunc;
-    T_LINKED_LIST_PARA  *sg_aptSoftTimerPara;
     
-    sg_aptSoftTimerFunc = sg_aptSoftTimer;
-    for(i = 0; i < 4; i++)
+    /* Update data struct */
+    sg_aptSoftTimerFunc = sg_ptSoftTimer;
+    /* Update the start time */
+    for(ucCount = 0; ucCount < sg_ucNodeNum; ucCount++)
     {
-        sg_aptSoftTimerFunc->ucElements1 = wCount / 1000;
-        if(0 == sg_aptSoftTimerFunc->ucCount)
-        {
-            ucCountRcd[i] = ORIGINAL_COUNT_ZERO;
-        }
-        else
-        {
-            ucCountRcd[i] = ORIGINAL_COUNT_NOT_ZERO;
-        }
+        sg_aptSoftTimerFunc->ucElements1 = g_wCount / 1000;
         sg_aptSoftTimerFunc = sg_aptSoftTimerFunc->ptNext;
     }
-        while(1)
+    
+    while(1)
     {
-        if(NODE_IS_UPDATE == ucUpdateNodeFlg)
+        /* The Node of Linked List has Changed */
+        if(NODE_IS_UPDATE == s_ucUpdateNodeFlg)
         {
-            ucExecuteFlag   = EXECUTE_FUNC;
-            ucUpdateNodeFlg = NODE_IS_NOT_UPDATE;
+            /* Update data struct */
+            sg_aptSoftTimerFunc = sg_ptSoftTimer;
+            /* Delete The Node of Linked List */
+            for(ucCount = 0; ucCount < sg_ucCycleTime; ucCount++)
+            {
+                if(DELETE_HEAD_NODE == s_ucDeleteFlg[ucCount])
+                {
+                    Linked_List_DeleteHead(&sg_ptSoftTimer);
+                }
+                else if(DELETE_LAST_NODE == s_ucDeleteFlg[ucCount])
+                {
+                    Linked_List_DeleteLast(sg_ptSoftTimer);
+                }
+                else if(DELETE_MIDDLE_NODE == s_ucDeleteFlg[ucCount])
+                {
+                    Linked_List_DeleteMiddle(sg_ptSoftTimer, ucCount+1);
+                }
+                /* Update the Delete Flag */
+                s_ucDeleteFlg[ucCount] = DELETE_NULL_NODE;
+                sg_aptSoftTimerFunc = sg_aptSoftTimerFunc->ptNext;
+            }
+            s_ucUpdateNodeFlg = NODE_IS_NOT_UPDATE;
         }
-        sg_aptSoftTimerFunc = sg_aptSoftTimer;
-        for(i = 0; i < ucCycleTime; i++)
+        
+        /* Update data struct */
+        sg_aptSoftTimerFunc = sg_ptSoftTimer;
+        /* Update Node Num After Delete the Node */
+        sg_ucCycleTime = sg_ucNodeNum;
+
+        /* Cycle check if it is need to run the Func */
+        for(ucCount = 0; ucCount < sg_ucCycleTime; ucCount++)
         {
-            if(wCount < sg_aptSoftTimerFunc->ucElements1)
+            /* If the time is overflow */
+            if(g_wCount/1000 < sg_aptSoftTimerFunc->ucElements1)
             {
-                if(((wCount + 65536)/1000 - sg_aptSoftTimerFunc->ucElements1) >= sg_aptSoftTimerFunc->ucElements2)
+                /* if delay time is up */
+                if(((g_wCount + 65536)/1000 - sg_aptSoftTimerFunc->ucElements1) >= sg_aptSoftTimerFunc->ucElements2)
                 {
-                    ucTimeFlag = TIME_IS_UP;
-                }/* else do nothing */
-            }
-            else if((wCount/1000 - sg_aptSoftTimerFunc->ucElements1) >= sg_aptSoftTimerFunc->ucElements2)
-            {
-                    ucTimeFlag = TIME_IS_UP;
-            }
-            else
-            {
-                    ucTimeFlag = TIME_IS_NOT_UP;
-            }
-                        if(TIME_IS_UP == ucTimeFlag)
-            {
-                if(sg_aptSoftTimerFunc->ucCount != 0)
-                {
-                    ucExecuteFlag = EXECUTE_FUNC;
-                    sg_aptSoftTimerFunc->ucCount--;
+                    s_ucTimeFlag = TIME_IS_UP;
                 }
                 else
                 {
-                    if(ORIGINAL_COUNT_ZERO == ucCountRcd[i])
-                    {
-                        ucExecuteFlag = EXECUTE_FUNC;
-                    }
-                                        else
-                    {
-                        ucExecuteFlag = NOT_EXECUTE_FUNC;
-                        if(0 == i)
-                        {
-                            Linked_List_DeleteHead(&sg_aptSoftTimerFunc);
-                        }
-                        else if(ucNodeNum == (i + 1))
-                        {
-                            Linked_List_DeleteLast(sg_aptSoftTimerFunc);
-                        }
-                        else
-                        {
-                            Linked_List_DeleteMiddle(sg_aptSoftTimerFunc, i+1);
-                        }
-                        ucNodeNum--;
-                    }
+                    s_ucTimeFlag = TIME_IS_NOT_UP;
                 }
-                                if(EXECUTE_FUNC == ucExecuteFlag)
+            }
+            /* If the time is not overflow */
+            else
+            {
+                /* if delay time is up */
+                if((g_wCount/1000 - sg_aptSoftTimerFunc->ucElements1) >= sg_aptSoftTimerFunc->ucElements2)
                 {
-                    sg_aptSoftTimerFunc->pfSoftTimerFunc();
-                    sg_aptSoftTimerFunc->ucElements1 = wCount / 1000;
+                    s_ucTimeFlag = TIME_IS_UP;
                 }
+                else
+                {
+                    s_ucTimeFlag = TIME_IS_NOT_UP;
+                }
+            }
+            /* if delay time is up */
+            if(TIME_IS_UP == s_ucTimeFlag)
+            {
+                /* It is need to run the function */
+                if(sg_aptSoftTimerFunc->ucCount != 1)
+                {
+                    s_ucExecuteFlag = EXECUTE_FUNC;
+                    if(sg_aptSoftTimerFunc->ucCount != 0)
+                    {
+                        sg_aptSoftTimerFunc->ucCount--;
+                    }
+                }
+                /* The last time to run the function */
+                else
+                {
+                    s_ucExecuteFlag = EXECUTE_FUNC;
+                    /* Delete the Head Node */
+                    if(0 == ucCount)
+                    {
+                       s_ucDeleteFlg[ucCount] = DELETE_HEAD_NODE;
+                    }
+                    /* Delete the Last Node */
+                    else if(sg_ucNodeNum == (ucCount + 1))
+                    {
+                       s_ucDeleteFlg[ucCount] = DELETE_LAST_NODE;
+                    }
+                    /* Delete the Middle Node */
+                    else
+                    {
+                       s_ucDeleteFlg[ucCount] = DELETE_MIDDLE_NODE;
+                    }
+                    sg_ucNodeNum--;
+                    s_ucUpdateNodeFlg = NODE_IS_UPDATE;
+                }
+            }
+            /* Run the Function and Update the Start Time */
+            if(EXECUTE_FUNC == s_ucExecuteFlag)
+            {
+                sg_aptSoftTimerFunc->pfSoftTimerFunc();
+                sg_aptSoftTimerFunc->ucElements1 = g_wCount / 1000;
+                s_ucExecuteFlag = NOT_EXECUTE_FUNC;
             }
             sg_aptSoftTimerFunc = sg_aptSoftTimerFunc->ptNext;
-            if(wCount >= 65500)
+            if(g_wCount >= 65500)
             {
-                wCount = 0;
+                g_wCount = 0;
             }
-        }
-        ucCycleTime = ucNodeNum;
-                for(i = 0; i < ucNodeNum; i++)
-        {
-            if((ORIGINAL_COUNT_NOT_ZERO == ucCountRcd[i]) && (0 == sg_aptSoftTimerFunc->ucCount))
-            {
-                
-            }
-        }
+        } 
     }
-    return SW_OK;  
+    return SW_OK; 
 }
