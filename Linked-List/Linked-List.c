@@ -15,15 +15,8 @@
 ******************************************************************************/
 
 #include "type_def.h"
-#include "pub.h"
-#include "sw_common.h"
-#include "boardctrl.h"
-#include "hardware.h"
-#include "App_Intern1.h"
-#include "Api.h"
-#include "Application.h"
-#include "app_common.h" 
 #include "Linked_List.h"
+#include "Soft_timer.h"
 
 /******************************************************************************
 * 函数名称: BYTE Linked_List_Init(T_LINKED_LIST_PARA **ptLinkedListInit)
@@ -46,11 +39,17 @@ BYTE Linked_List_Init(T_LINKED_LIST_PARA **o_ptLinkedListInit)
 
 
 /******************************************************************************
-* 函数名称: T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYTE ucData1, BYTE ucData2)
+* 函数名称: T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 * 功能说明: 创建链表
 * 输入参数: T_LINKED_LIST_PARA *ptLinkedListHead 链表头指针
-*           BYTE ucData1 链表数据1
-*           BYTE ucData2 链表数据2
+*           BYTE ucData1              链表数据1,用作起始时间
+*                                     1~256s
+*           BYTE ucData2              链表数据2,用作延时时间
+*                                     1~256s
+*           BYTE ucFreCount           链表数据3,用作功能函数执行次数
+*                                     0:无限次执行
+*                                     1-256:对应执行次数
+*           WORD32 (*pfFunc)(void)    链表数据4,用作功能函数调用
 * 输出参数: 无
 * 返 回 值: 头指针地址
 * 其他说明: 无
@@ -58,7 +57,7 @@ BYTE Linked_List_Init(T_LINKED_LIST_PARA **o_ptLinkedListInit)
 * ------------------------------------------------------------------------
 * 2017-02-14   V1.00      **         创建
 ******************************************************************************/
-T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYTE ucData1, BYTE ucData2)
+T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 {
     T_LINKED_LIST_PARA *ptLinkedListCreat;
 
@@ -76,19 +75,27 @@ T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYT
     }
     
     /* The Linked List contain One Node */
-    ptLinkedListHead               = ptLinkedListCreat;
-    ptLinkedListCreat->ucElements1 = ucData1;
-    ptLinkedListCreat->ucElements2 = ucData2;    
-    ptLinkedListCreat->ptNext      = NULL;
+    ptLinkedListHead                   = ptLinkedListCreat;
+    ptLinkedListCreat->ucElements1     = ucData1;
+    ptLinkedListCreat->ucElements2     = ucData2; 
+    ptLinkedListCreat->ucCount         = ucFreCount;
+    ptLinkedListCreat->pfSoftTimerFunc = pfFunc;       
+    ptLinkedListCreat->ptNext          = NULL;
     return ptLinkedListHead;
 }
 
 
 /******************************************************************************
-* 函数名称: BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **ptLinkedListInsert, BYTE ucData1, BYTE ucData2)
+* 函数名称: BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **ptLinkedListInsert, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 * 功能说明: 在表头添加节点
-* 输入参数: BYTE ucData1 链表数据1
-*           BYTE ucData2 链表数据2
+* 输入参数: BYTE ucData1              链表数据1,用作起始时间
+*                                     1~256s
+*           BYTE ucData2              链表数据2,用作延时时间
+*                                     1~256s
+*           BYTE ucFreCount           链表数据3,用作功能函数执行次数
+*                                     0:无限次执行
+*                                     1-256:对应执行次数
+*           WORD32 (*pfFunc)(void)    链表数据4,用作功能函数调用
 * 输出参数: T_LINKED_LIST_PARA **ptLinkedListInsert 链表头指针地址
 * 返 回 值: SW_OK   
 *           SW_NONE_MEANING 
@@ -97,7 +104,7 @@ T_LINKED_LIST_PARA* Linked_List_Create(T_LINKED_LIST_PARA *ptLinkedListHead, BYT
 * ------------------------------------------------------------------------
 * 2017-02-14   V1.00      **         创建
 ******************************************************************************/
-BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **o_ptLinkedListInsert, BYTE ucData1, BYTE ucData2)
+BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **o_ptLinkedListInsert, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 {
     T_LINKED_LIST_PARA *ptInsertHead;
 
@@ -110,21 +117,29 @@ BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **o_ptLinkedListInsert, BYTE ucDa
     }
     
     /* The Linked List Add One Node */
-    ptInsertHead->ucElements1 = ucData1;
-    ptInsertHead->ucElements2 = ucData2;    
+    ptInsertHead->ucElements1     = ucData1;
+    ptInsertHead->ucElements2     = ucData2;
+    ptInsertHead->ucCount         = ucFreCount;
+    ptInsertHead->pfSoftTimerFunc = pfFunc;  
     /* Linked to the behind Node */
-    ptInsertHead->ptNext      = (*o_ptLinkedListInsert);
+    ptInsertHead->ptNext          = (*o_ptLinkedListInsert);
     /* Upadte new Head Pointer */
-    (*o_ptLinkedListInsert)   = ptInsertHead;
+    (*o_ptLinkedListInsert)       = ptInsertHead;
     return SW_OK;
 }
 
 /******************************************************************************
-* 函数名称: BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1, BYTE ucData2)
+* 函数名称: BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 * 功能说明: 在表尾添加节点
 * 输入参数: T_LINKED_LIST_PARA *ptLinkedListInsert 链表最后一个节点的头指针
-*           BYTE ucData1 链表数据1
-*           BYTE ucData2 链表数据2
+*           BYTE ucData1              链表数据1,用作起始时间
+*                                     1~256s
+*           BYTE ucData2              链表数据2,用作延时时间
+*                                     1~256s
+*           BYTE ucFreCount           链表数据3,用作功能函数执行次数
+*                                     0:无限次执行
+*                                     1-256:对应执行次数
+*           WORD32 (*pfFunc)(void)    链表数据4,用作功能函数调用
 * 输出参数: 无
 * 返 回 值: SW_OK   
 *           SW_NONE_MEANING 
@@ -133,7 +148,7 @@ BYTE Linked_List_InsertHead(T_LINKED_LIST_PARA **o_ptLinkedListInsert, BYTE ucDa
 * ------------------------------------------------------------------------
 * 2017-02-14   V1.00      **         创建
 ******************************************************************************/
-BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1, BYTE ucData2)
+BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 {
     T_LINKED_LIST_PARA *ptInsertLast;
 
@@ -146,9 +161,11 @@ BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1
     }
     
     /* The Linked List Add One Node */
-    ptInsertLast->ucElements1  = ucData1;
-    ptInsertLast->ucElements2  = ucData2;    
-    ptInsertLast->ptNext       = NULL;
+    ptInsertLast->ucElements1      = ucData1;
+    ptInsertLast->ucElements2      = ucData2; 
+    ptInsertLast->ucCount          = ucFreCount;
+    ptInsertLast->pfSoftTimerFunc  = pfFunc; 
+    ptInsertLast->ptNext           = NULL;
     
     /* Find The Laste Node */    
     while(NULL != ptLinkedListInsert->ptNext)
@@ -161,12 +178,18 @@ BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1
 }
 
 /******************************************************************************
-* 函数名称: BYTE Linked_List_InsertMiddle(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucInsertNum, BYTE ucData1, BYTE ucData2)
+* 函数名称: BYTE Linked_List_InsertMiddle(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucInsertNum, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 * 功能说明: 在表中添加节点
 * 输入参数: T_LINKED_LIST_PARA *ptLinkedListInsert 链表插入节点的头指针
 *           BYTE ucInsertNum 插入节点号
-*           BYTE ucData1     链表数据1
-*           BYTE ucData2     链表数据2
+*           BYTE ucData1              链表数据1,用作起始时间
+*                                     1~256s
+*           BYTE ucData2              链表数据2,用作延时时间
+*                                     1~256s
+*           BYTE ucFreCount           链表数据3,用作功能函数执行次数
+*                                     0:无限次执行
+*                                     1-256:对应执行次数
+*           WORD32 (*pfFunc)(void)    链表数据4,用作功能函数调用
 * 输出参数: 无
 * 返 回 值: SW_OK   
 *           SW_NONE_MEANING 
@@ -175,7 +198,7 @@ BYTE Linked_List_InsertLast(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucData1
 * ------------------------------------------------------------------------
 * 2017-02-14   V1.00      **         创建
 ******************************************************************************/
-BYTE Linked_List_InsertMiddle(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucInsertNum, BYTE ucData1, BYTE ucData2)
+BYTE Linked_List_InsertMiddle(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucInsertNum, BYTE ucData1, BYTE ucData2, BYTE ucFreCount, WORD32 (*pfFunc)(void))
 {
     T_LINKED_LIST_PARA *ptInsertMiddle, *ptInsertTpm;
     BYTE ucCount = 0;
@@ -216,12 +239,13 @@ BYTE Linked_List_InsertMiddle(T_LINKED_LIST_PARA *ptLinkedListInsert, BYTE ucIns
     }
     
     /* Update the Insert Node Next point */
-    ptInsertMiddle->ptNext       = ptInsertTpm->ptNext;
+    ptInsertMiddle->ptNext          = ptInsertTpm->ptNext;
     /* Update the front of Insert Node Next point */
-    ptInsertTpm->ptNext          = ptInsertMiddle;
-    ptInsertMiddle->ucElements1  = ucData1;
-    ptInsertMiddle->ucElements2  = ucData2;    
-
+    ptInsertTpm->ptNext             = ptInsertMiddle;
+    ptInsertMiddle->ucElements1     = ucData1;
+    ptInsertMiddle->ucElements2     = ucData2;
+    ptInsertMiddle->ucCount         = ucFreCount;
+    ptInsertMiddle->pfSoftTimerFunc = pfFunc; 
     return SW_OK;
 }
 
